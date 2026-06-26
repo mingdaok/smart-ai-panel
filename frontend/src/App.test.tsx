@@ -18,7 +18,7 @@ describe('App', () => {
       { initialEntries: ['/'] }
     );
     render(<RouterProvider router={router} />);
-    // HomePage stub renders "Home"
-    expect(screen.getByText(/Home/i)).toBeDefined();
+    // HomePage renders the app title
+    expect(screen.getByText(/AI Panel Studio/i)).toBeDefined();
   });
 });

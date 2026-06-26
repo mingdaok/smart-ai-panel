@@ -234,16 +234,128 @@ class Scheduler:
         await sse_manager.broadcast(room_id, event_type, data)
 
     async def _run_discussion(self, room_id: str):
-        """
-        Stub -- no-op. Full discussion loop will be implemented in Task 15.
-        """
-        pass
+        room_repo = RoomRepo()
+        transcript_repo = TranscriptRepo()
+        insight_repo = InsightRepo()
+        expert_repo = ExpertRepo()
+
+        await room_repo.update_status(room_id, "discussing")
+        await self._broadcast(room_id, "room.status",
+                              {"room_id": room_id, "status": "discussing"})
+
+        round_num = 0
+        consecutive_no_insight = 0
+        last_insight_count = 0
+
+        try:
+            while round_num < self.MAX_ROUNDS and not self._room_stop_flags.get(room_id, True):
+                # Select next speaker
+                speaker = await self._select_next_speaker(
+                    room_id, round_num,
+                    last_speaker_id=None)
+
+                if speaker is None:
+                    # Host steps in with a question
+                    experts = await expert_repo.get_by_room(room_id)
+                    host_list = [e for e in experts if e["role"] == "host"]
+                    if not host_list:
+                        break
+                    speaker = host_list[0]
+                    line_type = "question"
+                else:
+                    line_type = "opening" if round_num == 0 else "argument"
+
+                # Update status to "preparing" with a public thought
+                if speaker["role"] == "expert":
+                    thought = self.llm.generate_public_thought(
+                        speaker["name"], speaker.get("stance", ""))
+                    await expert_repo.update_state(speaker["id"], "preparing", thought)
+                    await self._broadcast(room_id, "expert.state", {
+                        "expert_id": speaker["id"], "name": speaker["name"],
+                        "status": "preparing", "public_thought": thought
+                    })
+
+                # Generate speech content
+                lines = await transcript_repo.get_by_room(room_id)
+                context = self._build_context(lines, speaker.get("stance", ""))
+                content = self.llm.generate_speech(
+                    speaker["name"], speaker.get("stance", ""), context, line_type)
+
+                # Update status to "speaking"
+                await expert_repo.update_state(speaker["id"], "speaking", "")
+                await self._broadcast(room_id, "expert.state", {
+                    "expert_id": speaker["id"], "name": speaker["name"],
+                    "status": "speaking", "public_thought": ""
+                })
+
+                # Save transcript line and broadcast
+                seq = len(lines) + 1
+                line = await transcript_repo.add({
+                    "room_id": room_id, "expert_id": speaker["id"],
+                    "content": content, "line_type": line_type, "sequence_num": seq
+                })
+                await self._broadcast(room_id, "transcript.line", line)
+
+                # Back to idle
+                await expert_repo.update_state(speaker["id"], "idle", "")
+                await self._broadcast(room_id, "expert.state", {
+                    "expert_id": speaker["id"], "name": speaker["name"],
+                    "status": "idle", "public_thought": ""
+                })
+
+                # Extract insights every 2 rounds
+                if round_num > 0 and round_num % 2 == 0:
+                    all_lines = await transcript_repo.get_by_room(room_id)
+                    combined = " ".join(l["content"] for l in all_lines[-3:])
+                    result = await self._extract_insights(combined)
+                    for c_text in result.get("consensus", []):
+                        await insight_repo.add(room_id, "consensus", c_text)
+                    for d_text in result.get("disagreement", []):
+                        await insight_repo.add(room_id, "disagreement", d_text)
+                    insights = await insight_repo.get_by_room(room_id)
+                    await self._broadcast(room_id, "insight.update", {
+                        "consensus": [i for i in insights if i["type"] == "consensus"],
+                        "disagreement": [i for i in insights if i["type"] == "disagreement"],
+                    })
+                    if len(insights) == last_insight_count:
+                        consecutive_no_insight += 1
+                    else:
+                        consecutive_no_insight = 0
+                    last_insight_count = len(insights)
+
+                if consecutive_no_insight >= 2:
+                    break
+
+                round_num += 1
+
+        finally:
+            # Host closing speech
+            experts = await expert_repo.get_by_room(room_id)
+            host_list = [e for e in experts if e["role"] == "host"]
+            if host_list:
+                lines = await transcript_repo.get_by_room(room_id)
+                context = self._build_context(lines, "")
+                summary = self.llm.generate_speech(
+                    host_list[0]["name"], "中立", context, "closing")
+                seq = len(lines) + 1
+                closing_line = await transcript_repo.add({
+                    "room_id": room_id, "expert_id": host_list[0]["id"],
+                    "content": summary, "line_type": "closing", "sequence_num": seq
+                })
+                await self._broadcast(room_id, "transcript.line", closing_line)
+                await self._broadcast(room_id, "discussion.end", {
+                    "summary": summary, "total_rounds": round_num,
+                    "final_consensus": [], "final_disagreement": []
+                })
+
+            await room_repo.update_status(room_id, "finished")
+            await self._broadcast(room_id, "room.status",
+                                  {"room_id": room_id, "status": "finished"})
 
     async def start(self, room_id: str):
-        """Stub: flag room as running and spawn discussion task."""
         self._room_stop_flags[room_id] = False
+        import asyncio
         asyncio.create_task(self._run_discussion(room_id))
 
     async def stop(self, room_id: str):
-        """Stub: flag room to stop."""
         self._room_stop_flags[room_id] = True

@@ -87,7 +87,7 @@ class RealLLMClient:
             base_url=settings.deepseek_base_url,
         )
         self._timeout = settings.llm_timeout
-        self._model = "deepseek-chat"  # Deepseek V3/V4 chat model
+        self._model = "deepseek-v4-pro"  # Deepseek V4 Pro
 
     async def _chat(self, system: str, user: str, temperature: float = 0.7, max_tokens: int = 512) -> str:
         """Send a chat completion request. Returns the response text."""

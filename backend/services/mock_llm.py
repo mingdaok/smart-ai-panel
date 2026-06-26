@@ -23,7 +23,7 @@ FALLBACK_TEMPLATES = {
 }
 
 class MockLLMClient:
-    def generate_experts(self, topic: str, count: int) -> LLMExpertsResponse:
+    async def generate_experts(self, topic: str, count: int) -> LLMExpertsResponse:
         template = FALLBACK_TEMPLATES["generic"]
         experts = template["experts"][:count]
         # Pad if more experts needed than template has
@@ -34,7 +34,7 @@ class MockLLMClient:
             experts=[LLMExpertRaw(**e) for e in experts[:count]]
         )
 
-    def generate_speech(self, expert_name: str, stance: str, context: str, line_type: str) -> str:
+    async def generate_speech(self, expert_name: str, stance: str, context: str, line_type: str) -> str:
         speeches = {
             "argument": f"{expert_name}认为，基于{stance}的立场，这个问题需要更深入的探讨。",
             "rebuttal": f"{expert_name}反驳道：从前面的发言来看，有一些关键点被忽略了。",
@@ -45,13 +45,13 @@ class MockLLMClient:
         }
         return speeches.get(line_type, speeches["argument"])
 
-    def generate_insights(self, transcript_snippet: str) -> dict:
+    async def generate_insights(self, transcript_snippet: str) -> dict:
         return {
             "consensus": ["各方都认识到该议题的重要性"],
             "disagreement": ["在具体实施方案上存在分歧"]
         }
 
-    def generate_public_thought(self, expert_name: str, stance: str) -> str:
+    async def generate_public_thought(self, expert_name: str, stance: str) -> str:
         thoughts = [
             f"正在从{stance}的角度分析...",
             "正在组织论点...",

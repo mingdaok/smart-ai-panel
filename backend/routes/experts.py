@@ -24,7 +24,7 @@ async def generate_experts(room_id: str, body: ExpertGenerationRequest):
         raise HTTPException(status_code=409, detail="Experts already generated for this room")
 
     llm = RealLLMClient() if get_settings().llm_mode == "real" else MockLLMClient()
-    result = llm.generate_experts(room["topic"], room["expert_count"])
+    result = await llm.generate_experts(room["topic"], room["expert_count"])
 
     experts_data = []
     # Host first

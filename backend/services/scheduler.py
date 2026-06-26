@@ -312,7 +312,11 @@ class Scheduler:
                 # Extract insights every 2 rounds
                 if round_num > 0 and round_num % 2 == 0:
                     all_lines = await transcript_repo.get_by_room(room_id)
-                    combined = " ".join(l["content"] for l in all_lines[-3:])
+                    # Include expert names for better insight extraction
+                    combined_lines = []
+                    for l in all_lines[-5:]:
+                        combined_lines.append(f"{l['name']}: {l['content']}")
+                    combined = '\n'.join(combined_lines)
                     result = await self._extract_insights(combined)
                     for c_text in result.get("consensus", []):
                         await insight_repo.add(room_id, "consensus", c_text)

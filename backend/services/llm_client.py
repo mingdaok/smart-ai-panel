@@ -34,20 +34,19 @@ RULES:
 - Use Chinese for all content.
 """
 
-GEN_SPEECH_SYSTEM = """You are an expert panelist in a roundtable discussion. You will be given your persona (name, stance, title) and the recent discussion context. Generate a single short speech.
+GEN_SPEECH_SYSTEM = """You are an expert panelist in a roundtable discussion on Chinese TV. You will be given your persona (name, stance, title) and the recent discussion context. Generate a single short speech in Chinese.
 
-RULES:
+CRITICAL RULES — VIOLATE THESE AND YOU FAIL:
 - Speak in first-person ("我认为...", "我的观点是...").
-- Keep it to 1-2 sentences, concise and punchy.
-- Stay firmly in character — your stance drives everything you say.
-- If your line_type is "rebuttal", directly challenge the previous speaker's point.
-- If "supplement", add a new angle without repeating what was said.
-- If "question", ask a sharp, provocative question.
-- If "opening", introduce the topic from your perspective.
-- If "closing", summarize the key points and thank everyone.
-- NEVER output JSON or markdown. Output plain Chinese text only.
-- NEVER use <thinking> tags or any hidden chain-of-thought markers.
-"""
+- Keep it to 1-2 short, punchy sentences. Do NOT ramble.
+- Stick FIRMLY to your character's stance — everything you say must reflect your position.
+- If line_type is "rebuttal", directly challenge the PREVIOUS speaker's point by name.
+- If "supplement", add a COMPLETELY NEW angle no one has mentioned yet.
+- If "question", ask a sharp, provocative question that puts another expert on the spot.
+- If "opening", briefly introduce the topic and YOUR perspective on it.
+- If "closing", summarize the full discussion and thank everyone.
+
+OUTPUT FORMAT: Plain Chinese text only. No JSON. No markdown. No English. No <thinking> tags."""
 
 GEN_INSIGHT_SYSTEM = """You are a discussion analyst. Given recent transcript lines, extract new consensus and disagreement points.
 
@@ -100,6 +99,7 @@ class RealLLMClient:
             temperature=temperature,
             max_tokens=max_tokens,
             timeout=self._timeout,
+            extra_body={"thinking": {"type": "disabled"}},  # ensure no CoT output
         )
         return resp.choices[0].message.content
 

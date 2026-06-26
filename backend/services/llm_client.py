@@ -122,10 +122,10 @@ class RealLLMClient:
                     await asyncio.sleep(0.5)
                 # Fall through to fallback on last attempt
 
-        # Silent fallback — return Mock data, marked with fallback=True
-        logger.warning(f"LLM expert generation failed after 3 retries — using fallback lineup")
+        # Silent fallback — return Mock data
+        logger.warning("LLM expert generation failed after 3 retries — using fallback lineup")
         mock = MockLLMClient()
-        result = mock.generate_experts(topic, count)
+        result = await mock.generate_experts(topic, count)
         return result
 
     async def generate_speech(self, expert_name: str, stance: str, context: str, line_type: str) -> str:

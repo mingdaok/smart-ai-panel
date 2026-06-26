@@ -13,8 +13,10 @@ app.add_middleware(
 
 
 from backend.routes.rooms import router as rooms_router
+from backend.routes.experts import router as experts_router
 
 app.include_router(rooms_router)
+app.include_router(experts_router)
 
 
 @app.get("/health")

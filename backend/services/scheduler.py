@@ -254,11 +254,12 @@ class Scheduler:
         last_insight_count = 0
 
         try:
+            last_speaker_id = None
             while round_num < self.MAX_ROUNDS and not self._room_stop_flags.get(room_id, True):
                 # Select next speaker
                 speaker = await self._select_next_speaker(
                     room_id, round_num,
-                    last_speaker_id=None)
+                    last_speaker_id=last_speaker_id)
 
                 if speaker is None:
                     # Host steps in with a question
@@ -270,6 +271,7 @@ class Scheduler:
                     line_type = "question"
                 else:
                     line_type = "opening" if round_num == 0 else "argument"
+                    last_speaker_id = speaker["id"]
 
                 # Update status to "preparing" with a public thought
                 if speaker["role"] == "expert":
@@ -310,7 +312,7 @@ class Scheduler:
                 })
 
                 # Extract insights every 2 rounds
-                if round_num > 0 and round_num % 2 == 0:
+                if round_num > 0 and round_num % 2 == 0 and not (isinstance(speaker, dict) and speaker.get("role") == "host"):
                     all_lines = await transcript_repo.get_by_room(room_id)
                     # Include expert names for better insight extraction
                     combined_lines = []

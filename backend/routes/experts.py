@@ -3,6 +3,8 @@ from backend.models.expert import ExpertGenerationRequest
 from backend.repositories.room_repo import RoomRepo
 from backend.repositories.expert_repo import ExpertRepo
 from backend.services.mock_llm import MockLLMClient
+from backend.services.llm_client import RealLLMClient
+from backend.config import get_settings
 
 router = APIRouter(prefix="/api/rooms", tags=["experts"])
 
@@ -21,7 +23,7 @@ async def generate_experts(room_id: str, body: ExpertGenerationRequest):
     if existing:
         raise HTTPException(status_code=409, detail="Experts already generated for this room")
 
-    llm = MockLLMClient()
+    llm = RealLLMClient() if get_settings().llm_mode == "real" else MockLLMClient()
     result = llm.generate_experts(room["topic"], room["expert_count"])
 
     experts_data = []

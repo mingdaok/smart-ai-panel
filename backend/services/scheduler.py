@@ -12,6 +12,8 @@ from backend.repositories.insight_repo import InsightRepo
 from backend.repositories.room_repo import RoomRepo
 from backend.services.sse_manager import sse_manager
 from backend.services.mock_llm import MockLLMClient
+from backend.services.llm_client import RealLLMClient
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,11 @@ class Scheduler:
     W4 = 0.05  # noise
 
     def __init__(self):
-        self.llm = MockLLMClient()
+        settings = get_settings()
+        if settings.llm_mode == "real":
+            self.llm = RealLLMClient()
+        else:
+            self.llm = MockLLMClient()
         self._room_stop_flags: dict[str, bool] = {}
 
     async def _get_expert_states(self, room_id: str) -> dict[str, str]:
@@ -267,7 +273,7 @@ class Scheduler:
 
                 # Update status to "preparing" with a public thought
                 if speaker["role"] == "expert":
-                    thought = self.llm.generate_public_thought(
+                    thought = await self.llm.generate_public_thought(
                         speaker["name"], speaker.get("stance", ""))
                     await expert_repo.update_state(speaker["id"], "preparing", thought)
                     await self._broadcast(room_id, "expert.state", {
@@ -278,7 +284,7 @@ class Scheduler:
                 # Generate speech content
                 lines = await transcript_repo.get_by_room(room_id)
                 context = self._build_context(lines, speaker.get("stance", ""))
-                content = self.llm.generate_speech(
+                content = await self.llm.generate_speech(
                     speaker["name"], speaker.get("stance", ""), context, line_type)
 
                 # Update status to "speaking"

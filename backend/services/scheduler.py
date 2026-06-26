@@ -173,18 +173,22 @@ class Scheduler:
             hosts = [e for e in experts if e["role"] == "host"]
             return hosts[0] if hosts else None
 
-        # Build last_speak_times from transcript history
+        # Build last_speak_times from transcript history — use sequence_num for proper ordering
         transcript_repo = TranscriptRepo()
         lines = await transcript_repo.get_by_room(room_id)
+
+        # Track the last time each expert spoke based on line position
+        # We use a simple counter that increases with each line — the highest
+        # counter belongs to the most recent speaker
+        speak_counter = 0
         last_speak_times: dict[str, float] = {}
-        for line in lines:
-            # Use a timestamp-ordered approximation: later lines overwrite
-            # earlier ones, so each expert gets their most recent speak time.
-            last_speak_times[line["expert_id"]] = time.time()
+        for line in sorted(lines, key=lambda l: l.get("sequence_num", 0)):
+            speak_counter += 1
+            last_speak_times[line["expert_id"]] = float(speak_counter)
 
         last_content = lines[-1]["content"] if lines else ""
 
-        # Score only non-host experts
+        # Filter to only expert (non-host) candidates for scoring
         expert_candidates = [e for e in experts if e["role"] == "expert"]
         if not expert_candidates:
             return None

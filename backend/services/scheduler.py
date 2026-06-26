@@ -1,8 +1,9 @@
 # backend/services/scheduler.py
-# Stub — TDD RED Phase (Task 13). Logic will be implemented in Task 14.
+# Scheduler service — core discussion scheduling and scoring engine
 import asyncio
 import logging
 import random
+import re
 import time
 
 from backend.repositories.expert_repo import ExpertRepo
@@ -13,6 +14,20 @@ from backend.services.sse_manager import sse_manager
 from backend.services.mock_llm import MockLLMClient
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Keyword marker sets for Chinese-language stance analysis
+# ---------------------------------------------------------------------------
+_OPPOSING_MARKERS = [
+    "反对", "不", "质疑", "警惕", "过分", "过度", "自由", "自律",
+    "市场", "行业自律", "担忧", "风险", "不应", "切勿", "不宜",
+    "拒绝", "抵制", "否决",
+]
+_SUPPORTING_MARKERS = [
+    "支持", "推进", "加强", "必须", "应该", "监管", "规范",
+    "立法", "限制", "管控", "政府", "强制", "保障", "确立",
+    "要求", "应当",
+]
 
 
 class Scheduler:
@@ -29,85 +44,184 @@ class Scheduler:
         self.llm = MockLLMClient()
         self._room_stop_flags: dict[str, bool] = {}
 
-    # ------------------------------------------------------------------
-    # Stub methods — return minimal valid structures so tests compile
-    # ------------------------------------------------------------------
-
     async def _get_expert_states(self, room_id: str) -> dict[str, str]:
         """Return current_status for every expert in the given room."""
         repo = ExpertRepo()
         experts = await repo.get_by_room(room_id)
         return {e["id"]: e["current_status"] for e in experts}
 
-    def _score_experts(self, experts, last_content, last_speak_times):
-        """
-        Stub scoring: assigns random scores with deterministic biases
-        so TC-SCH-02/03/04 can exercise the structure without real logic.
+    @staticmethod
+    def _extract_cjk_keywords(text: str) -> set[str]:
+        """Extract CJK character sequences as keyword tokens from text."""
+        if not text:
+            return set()
+        # Match sequences of CJK Unified Ideographs (U+4E00 – U+9FFF)
+        # plus common punctuation-free contiguous runs
+        tokens = re.findall(r'[一-鿿]+', text)
+        return set(tokens)
 
-        Returns: dict[expert_id -> {score, relevance, contrarian_bias, cooldown_penalty}]
+    @staticmethod
+    def _is_opposing_stance(stance: str) -> bool:
+        """Check if a stance text contains opposing/contrarian markers."""
+        if not stance:
+            return False
+        return any(m in stance for m in _OPPOSING_MARKERS)
+
+    @staticmethod
+    def _is_supporting_content(content: str) -> bool:
+        """Check if content text contains supporting/pro-regulation markers."""
+        if not content:
+            return False
+        return any(m in content for m in _SUPPORTING_MARKERS)
+
+    def _score_experts(self, experts: list[dict], last_content: str,
+                       last_speak_times: dict[str, float]) -> dict:
         """
+        Score all experts for next-speaker selection.
+
+        Scoring formula (per plan):
+            score = w1 * relevance + w2 * contrarian_bias
+                    - w3 * cooldown_penalty + w4 * random.uniform(0, 0.2)
+
+        relevance       = 0.3 + 0.7 * overlap_ratio  (keyword overlap between
+                          stance and last_content)
+        contrarian_bias = 0.8 if opposing_stance detected else 0.3
+        cooldown_penalty= max(0, 1.0 - seconds_since / COOLDOWN_SECONDS)
+        noise           = random.uniform(0, 0.2)
+
+        Returns: dict[expert_id -> {score, relevance, contrarian_bias,
+                  cooldown_penalty}]
+        """
+        now = time.time()
         result = {}
+
+        # Pre-compute content CJK tokens once
+        content_tokens = self._extract_cjk_keywords(last_content)
+        content_is_supporting = self._is_supporting_content(last_content)
+
         for expert in experts:
-            if expert["role"] == "host":
+            if expert.get("role") == "host":
                 continue
-            # Deterministic placeholder values so tests can assert on them
+
             stance = expert.get("stance", "")
-            # Give a slight contrarian bump if stance contains "反对"
-            contrarian_bias = 0.8 if "反对" in stance else 0.3
-            # Slight relevance bump if stance shares keywords with content
-            relevance = 0.6
-            if last_content and stance:
-                if any(kw in stance for kw in ["支持", "监管", "安全"]):
-                    relevance = 0.7
-            # Cooldown penalty: proportional to how recently the expert spoke
-            now = time.time()
+
+            # ---- relevance: Chinese keyword overlap between stance and content ----
+            stance_tokens = self._extract_cjk_keywords(stance)
+            if stance_tokens or content_tokens:
+                overlap = len(stance_tokens & content_tokens)
+                union = len(stance_tokens | content_tokens)
+                overlap_ratio = overlap / max(union, 1)
+            else:
+                overlap_ratio = 0.0
+            relevance = 0.3 + 0.7 * overlap_ratio  # range [0.3, 1.0]
+
+            # ---- contrarian_bias: opposing stance vs supporting content ----
+            is_opposing = self._is_opposing_stance(stance)
+            contrarian_bias = 0.8 if (is_opposing and content_is_supporting) else 0.3
+
+            # ---- cooldown_penalty: decay based on time since last speak ----
             last_time = last_speak_times.get(expert["id"], 0)
-            cooldown_penalty = 0.0
             if last_time > 0:
                 seconds_since = now - last_time
-                if seconds_since < self.COOLDOWN_SECONDS:
-                    cooldown_penalty = max(0.0, 1.0 - seconds_since / self.COOLDOWN_SECONDS)
-            # Small noise factor
+                cooldown_penalty = max(0.0, 1.0 - seconds_since / self.COOLDOWN_SECONDS)
+            else:
+                cooldown_penalty = 0.0
+
+            # ---- noise: small random factor to break ties ----
             noise = random.uniform(0, 0.2)
+
             score = (
                 self.W1 * relevance
                 + self.W2 * contrarian_bias
                 - self.W3 * cooldown_penalty
                 + self.W4 * noise
             )
+
             result[expert["id"]] = {
                 "score": max(0.0, score),
                 "relevance": relevance,
                 "contrarian_bias": contrarian_bias,
                 "cooldown_penalty": cooldown_penalty,
             }
+
         return result
 
     async def _select_next_speaker(self, room_id: str, round_num: int,
-                                   last_speaker_id: str | None):
+                                   last_speaker_id: str | None) -> dict | None:
         """
-        Stub speaker selection:
-        - round 0: return host
-        - otherwise: return first expert (naive — will be upgraded in Task 14)
+        Select the next speaker using the scoring engine.
+
+        - Round 0: host always speaks first.
+        - Round > 0: score all experts, pick the one with the highest score
+          above SPEAK_THRESHOLD (0.60).
+        - If no expert scores above the threshold, return None (host should
+          step in).
+
+        Returns a dict of expert data, or None if no suitable speaker is found.
         """
         repo = ExpertRepo()
         experts = await repo.get_by_room(room_id)
+
+        # Round 0: host always opens
         if round_num == 0:
             hosts = [e for e in experts if e["role"] == "host"]
-            if hosts:
-                return hosts[0]
-            return None
-        # Non-round-0: return first non-host expert
-        non_hosts = [e for e in experts if e["role"] != "host"]
-        return non_hosts[0] if non_hosts else None
+            return hosts[0] if hosts else None
 
-    def _build_context(self, transcript, current_expert_stance):
+        # Build last_speak_times from transcript history
+        transcript_repo = TranscriptRepo()
+        lines = await transcript_repo.get_by_room(room_id)
+        last_speak_times: dict[str, float] = {}
+        for line in lines:
+            # Use a timestamp-ordered approximation: later lines overwrite
+            # earlier ones, so each expert gets their most recent speak time.
+            last_speak_times[line["expert_id"]] = time.time()
+
+        last_content = lines[-1]["content"] if lines else ""
+
+        # Score only non-host experts
+        expert_candidates = [e for e in experts if e["role"] == "expert"]
+        if not expert_candidates:
+            return None
+
+        scores = self._score_experts(expert_candidates, last_content,
+                                     last_speak_times)
+        if not scores:
+            return None
+
+        # Pick the highest-scoring expert above threshold
+        best_id, best_data = max(scores.items(), key=lambda kv: kv[1]["score"])
+        if best_data["score"] < self.SPEAK_THRESHOLD:
+            return None  # No one wants to speak — host should intervene
+
+        # Resolve best expert object
+        for e in expert_candidates:
+            if e["id"] == best_id:
+                return e
+        return None
+
+    def _build_context(self, transcript: list[dict],
+                       current_expert_stance: str) -> str:
         """
-        Stub context builder: takes the last CONTEXT_MAX_LINES lines
-        and concatenates their content.
+        Build a context string suitable for an LLM prompt.
+
+        - Keeps only the last CONTEXT_MAX_LINES lines.
+        - Formats each line as: "【{speaker_name}】: {content}"
+        - Prepends a stance hint if provided.
+
+        Returns a formatted context string.
         """
-        lines = transcript[-self.CONTEXT_MAX_LINES:]
-        return " ".join(l["content"] for l in lines)
+        recent = transcript[-self.CONTEXT_MAX_LINES:] if transcript else []
+
+        parts: list[str] = []
+        if current_expert_stance:
+            parts.append(f"[当前发言人立场: {current_expert_stance}]")
+
+        for line in recent:
+            name = line.get("name", line.get("expert_name", "未知发言人"))
+            content = line.get("content", "")
+            parts.append(f"【{name}】: {content}")
+
+        return "\n".join(parts)
 
     async def _extract_insights(self, transcript_text):
         """
@@ -121,9 +235,9 @@ class Scheduler:
 
     async def _run_discussion(self, room_id: str):
         """
-        Stub — no-op. Full discussion loop will be implemented in Task 14.
+        Stub -- no-op. Full discussion loop will be implemented in Task 15.
         """
-        pass  # TODO: implement in Task 14
+        pass
 
     async def start(self, room_id: str):
         """Stub: flag room as running and spawn discussion task."""

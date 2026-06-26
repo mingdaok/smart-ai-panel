@@ -26,3 +26,7 @@ class RoomDetail(RoomResponse):
     experts: list["ExpertResponse"] = []
     transcript_count: int = 0
     insight_count: int = 0
+
+
+from backend.models.expert import ExpertResponse
+RoomDetail.model_rebuild()

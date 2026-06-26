@@ -12,6 +12,11 @@ app.add_middleware(
 )
 
 
+from backend.routes.rooms import router as rooms_router
+
+app.include_router(rooms_router)
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}

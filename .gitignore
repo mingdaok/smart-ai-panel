@@ -1,3 +1,9 @@
 
 # Superpowers worktrees
 .worktrees/
+
+__pycache__/
+*.pyc
+_e2e_check.py
+test_db.py
+.superpowers/

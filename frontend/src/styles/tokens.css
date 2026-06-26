@@ -1,0 +1,36 @@
+/* frontend/src/styles/tokens.css */
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #13131a;
+  --bg-card: #1a1a24;
+  --bg-card-hover: #22222e;
+  --bg-transcript: #111118;
+  --text-primary: #f0f0f5;
+  --text-secondary: #a0a0b0;
+  --text-muted: #606078;
+  --border-default: #2a2a3a;
+  --border-active: #4a4a5a;
+  --expert-gradient-0: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --expert-gradient-1: linear-gradient(135deg, #3b82f6, #06b6d4);
+  --expert-gradient-2: linear-gradient(135deg, #10b981, #14b8a6);
+  --expert-gradient-3: linear-gradient(135deg, #f59e0b, #d97706);
+  --expert-gradient-4: linear-gradient(135deg, #ef4444, #dc2626);
+  --expert-gradient-5: linear-gradient(135deg, #ec4899, #be185d);
+  --expert-gradient-6: linear-gradient(135deg, #8b5cf6, #6366f1);
+  --expert-gradient-7: linear-gradient(135deg, #06b6d4, #0ea5e9);
+  --host-gradient: linear-gradient(135deg, #f8fafc, #94a3b8);
+  --host-text: #0a0a0f;
+  --anim-idle: pulse 3s ease-in-out infinite;
+  --anim-preparing: flicker 0.6s ease-in-out infinite;
+  --anim-speaking: glow 1.5s ease-in-out infinite;
+  --color-consensus: #10b981;
+  --color-consensus-bg: rgba(16, 185, 129, 0.10);
+  --color-disagreement: #f59e0b;
+  --color-disagreement-bg: rgba(245, 158, 11, 0.10);
+  --breakpoint-narrow: 768px;
+  --breakpoint-wide: 1440px;
+}
+
+@keyframes pulse { 0%,100%{opacity:.7;box-shadow:0 0 0 0 var(--border-default)} 50%{opacity:1;box-shadow:0 0 8px 2px transparent} }
+@keyframes flicker { 0%,100%{opacity:.6;box-shadow:0 0 6px 0 currentColor} 50%{opacity:1;box-shadow:0 0 16px 4px currentColor} }
+@keyframes glow { 0%,100%{opacity:1;box-shadow:0 0 12px 2px currentColor} 50%{opacity:.9;box-shadow:0 0 24px 8px currentColor} }

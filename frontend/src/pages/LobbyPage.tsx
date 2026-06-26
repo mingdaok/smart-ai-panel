@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getRoomDetail, generateExperts, type ExpertResponse } from '../api/rooms';
+import { getRoomDetail, type ExpertResponse } from '../api/rooms';
+import { generateExperts } from '../api/experts';
 import { useExpertStore } from '../store/expertSlice';
 import ExpertCard from '../components/lobby/ExpertCard';
 import ExpertConfirmPanel from '../components/lobby/ExpertConfirmPanel';

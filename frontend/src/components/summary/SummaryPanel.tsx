@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getRoomDetail, type ExpertResponse } from '../../api/rooms';
+import { getRoomDetail } from '../../api/rooms';
 import { useTranscriptStore } from '../../store/transcriptSlice';
 import { useInsightStore } from '../../store/insightSlice';
 

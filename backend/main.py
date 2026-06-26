@@ -5,7 +5,7 @@ app = FastAPI(title="AI Panel Studio", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -16,6 +16,13 @@ from backend.routes.rooms import router as rooms_router
 from backend.routes.experts import router as experts_router
 from backend.routes.stream import router as stream_router
 from backend.routes.discussion import router as discussion_router
+from backend.db.connection import init_db
+
+
+@app.on_event("startup")
+async def startup():
+    await init_db()
+
 
 app.include_router(rooms_router)
 app.include_router(experts_router)

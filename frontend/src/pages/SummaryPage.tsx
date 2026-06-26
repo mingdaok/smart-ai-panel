@@ -1,30 +1,30 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getRoomDetail, type ExpertResponse } from '../api/rooms';
+import { getRoomDetail } from '../api/rooms';
 import { useRoomStore } from '../store/roomSlice';
-import { useTranscriptStore } from '../store/transcriptSlice';
-import { useInsightStore } from '../store/insightSlice';
 import SummaryPanel from '../components/summary/SummaryPanel';
 
 export default function SummaryPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentRoom, setCurrentRoom } = useRoomStore();
-  const { lines, setLines } = useTranscriptStore();
-  const { consensus, disagreement, setInsights } = useInsightStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
+    // If we already have room data from Store (navigated from Studio), skip refetch
+    if (currentRoom && currentRoom.id === id) {
+      setLoading(false);
+      return;
+    }
+    // Cold load — direct page refresh or deep link
     getRoomDetail(id)
       .then((room) => {
         setCurrentRoom(room);
-        setLines([]);
-        setInsights([], []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [id, setCurrentRoom, setLines, setInsights]);
+  }, [id, currentRoom, setCurrentRoom]);
 
   if (loading) {
     return (

@@ -233,7 +233,7 @@ class Scheduler:
         """
         Stub: delegates to LLM client. Will be exercised with mock in tests.
         """
-        return self.llm.generate_insights(transcript_text)
+        return await self.llm.generate_insights(transcript_text)
 
     async def _broadcast(self, room_id, event_type, data):
         """Stub: forward to SSEManager singleton."""
@@ -341,7 +341,7 @@ class Scheduler:
             if host_list:
                 lines = await transcript_repo.get_by_room(room_id)
                 context = self._build_context(lines, "")
-                summary = self.llm.generate_speech(
+                summary = await self.llm.generate_speech(
                     host_list[0]["name"], "中立", context, "closing")
                 seq = len(lines) + 1
                 closing_line = await transcript_repo.add({

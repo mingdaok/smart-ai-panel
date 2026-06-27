@@ -36,7 +36,7 @@ class Scheduler:
     COOLDOWN_SECONDS = 30
     MAX_ROUNDS = 12
     CONTEXT_MAX_LINES = 15
-    SPEAK_THRESHOLD = 0.30
+    SPEAK_THRESHOLD = 0.01
     W1 = 0.40  # relevance
     W2 = 0.35  # contrarian
     W3 = 0.80  # cooldown (heavily penalize recent speakers to force turn-taking)
@@ -123,11 +123,15 @@ class Scheduler:
             is_opposing = self._is_opposing_stance(stance)
             contrarian_bias = 0.8 if (is_opposing and content_is_supporting) else 0.3
 
-            # ---- cooldown_penalty: decay based on time since last speak ----
-            last_time = last_speak_times.get(expert["id"], 0)
-            if last_time > 0:
-                seconds_since = now - last_time
-                cooldown_penalty = max(0.0, 1.0 - seconds_since / self.COOLDOWN_SECONDS)
+            # ---- cooldown_penalty: decay based on rounds since last speak ----
+            rounds_since_last_speak = None
+            for i, line in enumerate(reversed(lines)):
+                if line.get("expert_id") == expert["id"]:
+                    rounds_since_last_speak = i
+                    break
+            
+            if rounds_since_last_speak is not None:
+                cooldown_penalty = max(0.0, 1.0 - (rounds_since_last_speak / 4.0))
             else:
                 cooldown_penalty = 0.0
 

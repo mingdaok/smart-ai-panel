@@ -28,6 +28,10 @@ def create_submission_zip():
                 # Do not zip the zip file itself if it happens to be inside
                 if file.endswith('.zip'):
                     continue
+                
+                # Never include environment files containing secrets
+                if file == '.env' or file.startswith('.env.'):
+                    continue
                     
                 file_path = Path(root) / file
                 # The archive name should be relative to base_dir

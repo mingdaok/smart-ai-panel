@@ -10,7 +10,7 @@ class Settings:
     deepseek_base_url: str = field(default_factory=lambda: os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"))
     db_file_path: str = field(default_factory=lambda: os.getenv("DB_FILE_PATH", "./database/ai_panel.db"))
     port: int = field(default_factory=lambda: int(os.getenv("PORT", "3000")))
-    llm_mode: str = field(default_factory=lambda: os.getenv("LLM_MODE", "real"))
+    llm_mode: str = field(default_factory=lambda: os.getenv("LLM_MODE", "mock"))
     max_retries: int = 2
     llm_timeout: int = 30
 

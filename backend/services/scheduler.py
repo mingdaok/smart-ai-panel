@@ -80,7 +80,7 @@ class Scheduler:
         return any(m in content for m in _SUPPORTING_MARKERS)
 
     def _score_experts(self, experts: list[dict], last_content: str,
-                       last_speak_times: dict[str, float]) -> dict:
+                       last_speak_times: dict[str, float], lines: list[dict]) -> dict:
         """
         Score all experts for next-speaker selection.
 
@@ -131,11 +131,17 @@ class Scheduler:
             else:
                 cooldown_penalty = 0.0
 
-            # ---- name_bonus: massive boost if directly addressed by previous speaker ----
+            # ---- name_bonus: boost if directly addressed by previous speaker ----
             name = expert.get("name", "")
             name_bonus = 0.0
             if name and len(name) >= 2 and name in last_content:
                 name_bonus = 2.0  # Guarantee they speak next
+
+            # ---- mic hog penalty: prevent infinite ping-pong between 2 experts ----
+            recent_speeches = sum(1 for line in lines[-4:] if line.get("expert_id") == expert["id"])
+            if recent_speeches >= 2:
+                name_bonus = 0.0
+                cooldown_penalty += 2.0  # Massive penalty to force someone else to speak
 
             # ---- noise: small random factor to break ties ----
             noise = random.uniform(0, 0.2)
@@ -202,7 +208,7 @@ class Scheduler:
             return None
 
         scores = self._score_experts(expert_candidates, last_content,
-                                     last_speak_times)
+                                     last_speak_times, lines)
         if not scores:
             return None
 

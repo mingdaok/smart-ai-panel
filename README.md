@@ -1,6 +1,6 @@
 # AI Panel Studio - 智能多 Agent 圆桌演播厅 (Web App MVP)
 
-> 本项目为 AI 开发实习生远程作业提交作品。基于大模型（Deepseek V4 Pro）驱动的多智能体自主调度演播厅。
+> 基于大模型（Deepseek V4 Pro）驱动的多智能体自主调度演播厅。
 
 ## 📖 项目简介
 "AI Panel Studio" 是一款沉浸式的“AI 圆桌讨论”Web 应用。
@@ -38,7 +38,7 @@
 ```env
 # 大模型 API 配置
 DEEPSEEK_API_KEY=your_deepseek_v4_pro_api_key
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v4
 
 # 数据库配置
 DB_FILE_PATH=./database/ai_panel.db

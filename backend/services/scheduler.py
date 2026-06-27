@@ -36,10 +36,10 @@ class Scheduler:
     COOLDOWN_SECONDS = 30
     MAX_ROUNDS = 12
     CONTEXT_MAX_LINES = 15
-    SPEAK_THRESHOLD = 0.60
+    SPEAK_THRESHOLD = 0.30
     W1 = 0.40  # relevance
     W2 = 0.35  # contrarian
-    W3 = 0.20  # cooldown
+    W3 = 0.80  # cooldown (heavily penalize recent speakers to force turn-taking)
     W4 = 0.05  # noise
 
     def __init__(self):
@@ -58,12 +58,11 @@ class Scheduler:
 
     @staticmethod
     def _extract_cjk_keywords(text: str) -> set[str]:
-        """Extract CJK character sequences as keyword tokens from text."""
+        """Extract individual CJK characters as tokens from text."""
         if not text:
             return set()
-        # Match sequences of CJK Unified Ideographs (U+4E00 – U+9FFF)
-        # plus common punctuation-free contiguous runs
-        tokens = re.findall(r'[一-鿿]+', text)
+        # Match individual CJK Unified Ideographs
+        tokens = re.findall(r'[一-鿿]', text)
         return set(tokens)
 
     @staticmethod
@@ -115,8 +114,7 @@ class Scheduler:
             stance_tokens = self._extract_cjk_keywords(stance)
             if stance_tokens or content_tokens:
                 overlap = len(stance_tokens & content_tokens)
-                union = len(stance_tokens | content_tokens)
-                overlap_ratio = overlap / max(union, 1)
+                overlap_ratio = overlap / max(len(stance_tokens), 1)
             else:
                 overlap_ratio = 0.0
             relevance = 0.3 + 0.7 * overlap_ratio  # range [0.3, 1.0]
@@ -133,6 +131,12 @@ class Scheduler:
             else:
                 cooldown_penalty = 0.0
 
+            # ---- name_bonus: massive boost if directly addressed by previous speaker ----
+            name = expert.get("name", "")
+            name_bonus = 0.0
+            if name and len(name) >= 2 and name in last_content:
+                name_bonus = 2.0  # Guarantee they speak next
+
             # ---- noise: small random factor to break ties ----
             noise = random.uniform(0, 0.2)
 
@@ -141,6 +145,7 @@ class Scheduler:
                 + self.W2 * contrarian_bias
                 - self.W3 * cooldown_penalty
                 + self.W4 * noise
+                + name_bonus
             )
 
             result[expert["id"]] = {
@@ -148,6 +153,7 @@ class Scheduler:
                 "relevance": relevance,
                 "contrarian_bias": contrarian_bias,
                 "cooldown_penalty": cooldown_penalty,
+                "name_bonus": name_bonus,
             }
 
         return result
@@ -177,14 +183,16 @@ class Scheduler:
         transcript_repo = TranscriptRepo()
         lines = await transcript_repo.get_by_room(room_id)
 
-        # Track the last time each expert spoke based on line position
-        # We use a simple counter that increases with each line — the highest
-        # counter belongs to the most recent speaker
-        speak_counter = 0
         last_speak_times: dict[str, float] = {}
+        from datetime import datetime
         for line in sorted(lines, key=lambda l: l.get("sequence_num", 0)):
-            speak_counter += 1
-            last_speak_times[line["expert_id"]] = float(speak_counter)
+            dt_str = line.get("created_at")
+            if dt_str:
+                try:
+                    dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                    last_speak_times[line["expert_id"]] = dt.timestamp()
+                except Exception:
+                    last_speak_times[line["expert_id"]] = time.time()
 
         last_content = lines[-1]["content"] if lines else ""
 
@@ -304,7 +312,8 @@ class Scheduler:
                 seq = len(lines) + 1
                 line = await transcript_repo.add({
                     "room_id": room_id, "expert_id": speaker["id"],
-                    "content": content, "line_type": line_type, "sequence_num": seq
+                    "content": content, "line_type": line_type, "sequence_num": seq,
+                    "name": speaker["name"], "color": speaker.get("color", "#fff")
                 })
                 await self._broadcast(room_id, "transcript.line", line)
 
@@ -356,7 +365,8 @@ class Scheduler:
                 seq = len(lines) + 1
                 closing_line = await transcript_repo.add({
                     "room_id": room_id, "expert_id": host_list[0]["id"],
-                    "content": summary, "line_type": "closing", "sequence_num": seq
+                    "content": summary, "line_type": "closing", "sequence_num": seq,
+                    "name": host_list[0]["name"], "color": host_list[0].get("color", "#fff")
                 })
                 await self._broadcast(room_id, "transcript.line", closing_line)
                 await self._broadcast(room_id, "discussion.end", {

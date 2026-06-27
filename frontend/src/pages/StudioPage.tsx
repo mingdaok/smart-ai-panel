@@ -35,6 +35,8 @@ export default function StudioPage() {
   }, [id, setCurrentRoom, setExperts, setLines, setInsights]);
 
   useEffect(() => {
+    if (currentRoom?.id !== id) return; // Prevent redirecting using stale state from previous rooms
+    
     if (
       currentRoom?.status === 'ready' ||
       currentRoom?.status === 'discussing'
@@ -47,7 +49,7 @@ export default function StudioPage() {
     ) {
       navigate(`/room/${id}/summary`);
     }
-  }, [currentRoom?.status, connect, id, navigate]);
+  }, [currentRoom?.status, currentRoom?.id, connect, id, navigate]);
 
   return (
     <div

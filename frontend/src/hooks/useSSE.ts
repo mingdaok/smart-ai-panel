@@ -19,6 +19,10 @@ export function useSSE(roomId: string | null) {
 
   const connect = useCallback(() => {
     if (!roomId) return;
+    
+    if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+    }
 
     const es = new EventSource(`${SSE_BASE}/api/rooms/${roomId}/stream`);
     eventSourceRef.current = es;

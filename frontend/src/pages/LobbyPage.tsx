@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRoomDetail, type ExpertResponse } from '../api/rooms';
 import { generateExperts } from '../api/experts';
@@ -11,6 +11,7 @@ export default function LobbyPage() {
   const navigate = useNavigate();
   const { experts, host, setExperts } = useExpertStore();
   const [loading, setLoading] = useState(true);
+  const generationStartedRef = useRef(false);
 
   useEffect(() => {
     if (!id) return;
@@ -23,13 +24,20 @@ export default function LobbyPage() {
           setLoading(false);
           return;
         }
-        // Generate if no experts yet
+        
+        // Generate if no experts yet, and prevent double generation in strict mode
+        if (generationStartedRef.current) return;
+        generationStartedRef.current = true;
+        
         generateExperts(id)
           .then((data) => {
             setExperts(data.host, data.experts);
             setLoading(false);
           })
-          .catch(() => setLoading(false));
+          .catch(() => {
+              setLoading(false);
+              generationStartedRef.current = false;
+          });
       })
       .catch(() => setLoading(false));
   }, [id, setExperts]);

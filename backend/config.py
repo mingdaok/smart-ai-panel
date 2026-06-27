@@ -1,6 +1,8 @@
 import os
 from dataclasses import dataclass, field
+from dotenv import load_dotenv
 
+load_dotenv()
 
 @dataclass
 class Settings:
@@ -11,10 +13,6 @@ class Settings:
     llm_mode: str = field(default_factory=lambda: os.getenv("LLM_MODE", "mock"))
     max_retries: int = 2
     llm_timeout: int = 30
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 _settings: Settings | None = None
